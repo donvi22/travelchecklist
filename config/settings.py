@@ -126,3 +126,14 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# Si un usuario intenta entrar en una vista protegida sin iniciar sesión,
+# Django lo enviará a esta URL.
+LOGIN_URL = 'trips:login'
+
+# Después de iniciar sesión correctamente, Django lo redirigirá aquí.
+LOGIN_REDIRECT_URL = 'trips:home'
+
+# Después de cerrar sesión, el usuario volverá a esta página.
+LOGOUT_REDIRECT_URL = 'trips:home'
