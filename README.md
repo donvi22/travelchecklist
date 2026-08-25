@@ -25,3 +25,6 @@ Construir una aplicación web sencilla para gestionar viajes y tareas asociadas.
 
 ## Fecha de creación
 2026
+
+django
+Super2026@
