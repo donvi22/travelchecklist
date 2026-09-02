@@ -1,5 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
+from django.core.paginator import Paginator  # Divide resultados en páginas
+from django.db.models import Q               # Permite búsquedas OR en varios campos
 from django.shortcuts import render, redirect, get_object_or_404
 
 from .forms import TripForm, TaskForm
@@ -15,6 +17,8 @@ def signup(request):
     # Registro de usuario
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
+
+        # form.is_valid() lanza la validación del formulario
         if form.is_valid():
             form.save()
             return redirect('trips:login')
@@ -26,9 +30,60 @@ def signup(request):
 
 @login_required
 def trip_list(request):
-    # Lista solo los viajes del usuario autenticado
+    # 1) Consulta base: solo viajes del usuario autenticado
     trips = Trip.objects.filter(user=request.user)
-    return render(request, 'trips/trip_list.html', {'trips': trips})
+
+    # 2) Leemos parámetros GET del listado
+    q = request.GET.get('q', '').strip()
+    destination = request.GET.get('destination', '').strip()
+    order = request.GET.get('order', 'start_desc')
+
+    # 3) Búsqueda libre en varios campos
+    if q:
+        trips = trips.filter(
+            Q(title__icontains=q) |
+            Q(destination__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
+    # 4) Filtro por destino exacto (lo recibimos desde un desplegable)
+    if destination:
+        trips = trips.filter(destination=destination)
+
+    # 5) Orden dinámico según la opción elegida
+    order_options = {
+        'start_desc': '-start_date',   # Más recientes primero
+        'start_asc': 'start_date',     # Más antiguos primero
+        'destination_asc': 'destination',
+        'created_desc': '-created_at',
+        'created_asc': 'created_at',
+    }
+    trips = trips.order_by(order_options.get(order, '-start_date'))
+
+    # 6) Lista de destinos únicos para rellenar el filtro del template
+    destinations = (
+        Trip.objects
+        .filter(user=request.user)
+        .values_list('destination', flat=True)
+        .distinct()
+        .order_by('destination')
+    )
+
+    # 7) Paginación: 4 viajes por página
+    paginator = Paginator(trips, 4)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # 8) Enviamos al template tanto la página actual como los filtros activos
+    context = {
+        'trips': page_obj.object_list,
+        'page_obj': page_obj,
+        'q': q,
+        'destination': destination,
+        'order': order,
+        'destinations': destinations,
+    }
+    return render(request, 'trips/trip_list.html', context)
 
 
 @login_required
@@ -36,6 +91,8 @@ def trip_create(request):
     # Crear un nuevo viaje
     if request.method == 'POST':
         form = TripForm(request.POST)
+
+        # Si el formulario pasa validación, guardamos el viaje
         if form.is_valid():
             trip = form.save(commit=False)
             trip.user = request.user
